@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Present Reality VR Gift Cube — swirlingbrain</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #05050d;
+      --neon-cyan: #00f3ff;
+      --neon-magenta: #ff007f;
+      --neon-purple: #9d4edd;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --glass-bg: rgba(15, 23, 42, 0.65);
+      --glass-border: rgba(0, 243, 255, 0.25);
+      --glass-hover: rgba(0, 243, 255, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Rajdhani', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Starfield Canvas Background */
+    #space-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      background: radial-gradient(circle at 50% 30%, #12092b 0%, #05050d 80%);
+    }
+
+    /* Content Layout */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+
+    /* Header & Hero */
+    header {
+      text-align: center;
+      margin-top: 3rem;
+      margin-bottom: 4rem;
+      position: relative;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 1rem;
+      border-radius: 50px;
+      background: rgba(0, 243, 255, 0.1);
+      border: 1px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2.2rem, 6vw, 4rem);
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      background: linear-gradient(135deg, #ffffff 20%, var(--neon-cyan) 60%, var(--neon-magenta) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+      margin-bottom: 1rem;
+    }
+
+    .subtitle {
+      font-size: 1.35rem;
+      color: var(--text-muted);
+      max-width: 700px;
+      margin: 0 auto 2rem;
+      font-weight: 500;
+    }
+
+    .author-tag {
+      color: var(--neon-magenta);
+      font-weight: 700;
+    }
+
+    /* Action Button */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.9rem 2.2rem;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #05050d;
+      background: linear-gradient(90deg, var(--neon-cyan), #00b8ff);
+      border: none;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 25px rgba(0, 243, 255, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 0 35px rgba(0, 243, 255, 0.7);
+      background: linear-gradient(90deg, #52f6ff, var(--neon-cyan));
+    }
+
+    /* Glass Cards Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 2rem;
+      margin-bottom: 4rem;
+    }
+
+    .card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+      opacity: 0.5;
+    }
+
+    .card:hover {
+      border-color: var(--glass-hover);
+      transform: translateY(-5px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 243, 255, 0.15);
+    }
+
+    .card h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.4rem;
+      color: var(--neon-cyan);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card p {
+      color: var(--text-main);
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Tech Specs List */
+    .specs-list {
+      list-style: none;
+    }
+
+    .specs-list li {
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.05rem;
+    }
+
+    .specs-list li:last-child {
+      border-bottom: none;
+    }
+
+    .spec-label {
+      color: var(--text-muted);
+    }
+
+    .spec-val {
+      color: var(--neon-magenta);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    /* Highlight Banner */
+    .highlight-banner {
+      background: linear-gradient(135deg, rgba(157, 78, 221, 0.2), rgba(0, 243, 255, 0.1));
+      border: 1px solid rgba(157, 78, 221, 0.4);
+      border-radius: 16px;
+      padding: 2.5rem;
+      text-align: center;
+      position: relative;
+      margin-bottom: 4rem;
+    }
+
+    .highlight-banner h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.6rem;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 2rem;
+    }
+
+    footer a {
+      color: var(--neon-cyan);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Dynamic Starfield Background -->
+  <canvas id="space-bg"></canvas>
+
+  <div class="container">
+    <header>
+      <div class="badge">Thingiverse #6503377</div>
+      <h1>Present Reality<br>VR Gift Cube</h1>
+      <p class="subtitle">An interactive, micro-VR headset experience designed by <span class="author-tag">swirlingbrain</span>.</p>
+      <a href="https://www.thingiverse.com/thing:6503377" target="_blank" rel="noopener" class="btn-primary">
+        <span>View on Thingiverse</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      </a>
+    </header>
+
+    <main>
+      <!-- Highlight Banner -->
+      <section class="highlight-banner">
+        <h3>Taking Gift Cubes To The Next Dimension</h3>
+        <p>Evolving beyond traditional maze cubes and video game gift boxes, the <strong>Present Reality VR Gift Cube</strong> combines 3D printing with embedded hardware to deliver an ultra-compact virtual reality puzzle box.</p>
+      </section>
+
+      <div class="grid">
+        <!-- Feature 1 -->
+        <article class="card">
+          <h2>🚀 Project Concept</h2>
+          <p>Created as an interactive gift vessel, this 3D-printed device houses dual displays and micro-controller hardware to simulate a miniature VR environment inside a portable cube.</p>
+        </article>
+
+        <!-- Feature 2 -->
+        <article class="card">
+          <h2>⚡ Hardware Architecture</h2>
+          <ul class="specs-list">
+            <li>
+              <span class="spec-label">Brain</span>
+              <span class="spec-val">ESP32 Microcontroller</span>
+            </li>
+            <li>
+              <span class="spec-label">Displays</span>
+              <span class="spec-val">Dual TFT Screens</span>
+            </li>
+            <li>
+              <span class="spec-label">Graphics Engine</span>
+              <span class="spec-val">TGX 3D Library</span>
+            </li>
+            <li>
+              <span class="spec-label">Enclosure</span>
+              <span class="spec-val">Custom 3D Print</span>
+            </li>
+          </ul>
+        </article>
+
+        <!-- Feature 3 -->
+        <article class="card">
+          <h2>🛠️ Licensing & Details</h2>
+          <ul class="specs-list">
+            <li>
+              <span class="spec-label">Designer</span>
+              <span class="spec-val">swirlingbrain</span>
+            </li>
+            <li>
+              <span class="spec-label">License</span>
+              <span class="spec-val">CC BY-SA</span>
+            </li>
+            <li>
+              <span class="spec-label">Category</span>
+              <span class="spec-val">Games / Puzzles</span>
+            </li>
+            <li>
+              <span class="spec-label">Source Files</span>
+              <span class="spec-val">STL 3D Models</span>
+            </li>
+          </ul>
+        </article>
+      </div>
+    </main>
+
+    <footer>
+      <p>Designed for Thingiverse Project <strong>#6503377</strong> — Created by swirlingbrain.</p>
+    </footer>
+  </div>
+
+  <script>
+    // Canvas Starfield Effect
+    const canvas = document.getElementById('space-bg');
+    const ctx = canvas.getContext('2d');
+
+    let stars = [];
+    const numStars = 160;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < numStars; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 1.5 + 0.3,
+          color: Math.random() > 0.3 ? '#00f3ff' : (Math.random() > 0.5 ? '#ff007f' : '#ffffff'),
+          alpha: Math.random(),
+          speed: Math.random() * 0.02 + 0.005
+        });
+      }
+    }
+
+    function drawStars() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      stars.forEach(star => {
+        star.alpha += star.speed;
+        if (star.alpha > 1 || star.alpha < 0) {
+          star.speed = -star.speed;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = Math.abs(star.alpha);
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.fillStyle = star.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = star.color;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      requestAnimationFrame(drawStars);
+    }
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      initStars();
+    });
+
+    resizeCanvas();
+    initStars();
+    drawStars();
+  </script>
+</body>
+</html>
