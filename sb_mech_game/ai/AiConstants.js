@@ -1,7 +1,17 @@
 export const SENSOR_RANGE = 400;
 export const RETREAT_ARMOR_FRACTION = 0.25; // retreat when average remaining armor fraction drops below this
 export const RETREAT_HEAT_FRACTION = 0.8; // retreat when heat exceeds this fraction of HEAT_SHUTDOWN_THRESHOLD
-export const ENGAGEMENT_RANGE = 250; // AI tries to close to within this range before committing to fire
+// AI tries to close to within this range before committing to fire. Deliberately
+// kept well SHORTER than the ~170-unit spawn separation (see main.js's
+// SPAWN_RADIUS) so there's a genuine approach phase before anyone can shoot --
+// this was originally 250 (bigger than the old ~120-unit spawn gap, so combat
+// started on tick one with zero reaction time) then 130 (closing the ~40-unit
+// gap only bought about 2.4 real-time seconds before the player took damage,
+// and ~5s before dying with no player input at all -- still confirmed too
+// punishing by real user playtesting). 90 requires closing roughly 80 units,
+// pushing first contact out further and giving a real player meaningfully
+// more time to get oriented, aim, and react before anyone can fire.
+export const ENGAGEMENT_RANGE = 90;
 
 // The following are AI-internal tuning constants, not part of the plan's
 // prescribed list above, used only by ai/Behavior.js for steering/facing.

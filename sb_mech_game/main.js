@@ -54,7 +54,11 @@ const TEAM_LOADOUTS = [
   { id: 'enemy-4', team: 'enemies', chassisType: 'assault', weapons: ['autocannon', 'missile'] },
 ];
 
-const SPAWN_RADIUS = 60;
+// 85 keeps spawns comfortably inside the 200x200 terrain (+-100) and the
+// +-110 shadow frustum, while making the ~170-unit lane separation wider than
+// ai/AiConstants.js's ENGAGEMENT_RANGE (130) -- mechs have to actually close
+// distance before anyone can fire, instead of spawning already in range.
+const SPAWN_RADIUS = 85;
 function spawnPositionFor(laneIndex, team) {
   const sideSign = team === 'allies' ? -1 : 1;
   const laneOffset = laneIndex * 14 - 21;
