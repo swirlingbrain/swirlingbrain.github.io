@@ -108,13 +108,30 @@ function playEnvelope(audioManager, envelope, sourcePosition) {
   sourceNode.stop(now + totalDuration + 0.05);
 }
 
+// Real user playtesting reported the audio as "deafening" -- with up to 8
+// mechs able to fire/impact/footstep simultaneously and no limiting on the
+// output chain, individual envelope amplitudes (0.6-0.9, tuned assuming a
+// single isolated sound) stack and clip when several play at once. A
+// DynamicsCompressorNode on the master bus prevents that stacking from
+// clipping, and MASTER_GAIN_LEVEL pulls the overall level down to something
+// reasonable for a sustained multi-mech firefight rather than one test sound.
+const MASTER_GAIN_LEVEL = 0.35;
+
 export function createAudioManager(listenerMech) {
   const AudioContextClass = getAudioContextClass();
   const context = new AudioContextClass();
 
+  const compressor = context.createDynamicsCompressor();
+  compressor.threshold.value = -24;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 8;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.15;
+  compressor.connect(context.destination);
+
   const masterGain = context.createGain();
-  masterGain.gain.value = 1;
-  masterGain.connect(context.destination);
+  masterGain.gain.value = MASTER_GAIN_LEVEL;
+  masterGain.connect(compressor);
 
   const audioManager = {
     context,
