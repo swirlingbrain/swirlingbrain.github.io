@@ -96,6 +96,14 @@ overlay.addEventListener('click', () => {
     playAmbientLoop(audioManager);
   }
   resumeAudioContext(audioManager).catch(() => {});
+  // The match (AI movement/combat/damage) does not begin until the player
+  // actually clicks to start -- previously the GameLoop started unconditionally
+  // at module load, so combat (including AI targeting/damaging the player's
+  // own mech) was already running before the player had even seen the
+  // controls or clicked, let alone pressed a key. loop.start() is idempotent
+  // (a no-op if already running), so this is safe even if the overlay is
+  // clicked again after a pointer-lock loss and reclick.
+  loop.start();
 });
 
 // Cheap circle-vs-circle collision against terrain props (rock cluster,
@@ -239,6 +247,27 @@ function checkWinCondition() {
   showMatchResult(alliesAlive ? 'VICTORY' : 'DEFEAT');
 }
 
+// Player death feedback: previously, once playerMech.alive went false, all
+// input was silently ignored for the rest of the match with zero indication
+// why -- keys would just stop doing anything. This shows a persistent
+// "YOU WERE DESTROYED" banner the moment it happens (edge-triggered so it
+// only fires once), separate from the full match-result overlay which only
+// appears later once the whole team is eliminated.
+let playerDeathMessageShown = false;
+function checkPlayerDeathFeedback() {
+  if (playerDeathMessageShown || playerMech.alive) return;
+  playerDeathMessageShown = true;
+  const deathBanner = document.createElement('div');
+  deathBanner.style.cssText = `
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    color: #ff5b4a; font-family: sans-serif; font-size: 1.5rem; font-weight: bold;
+    letter-spacing: 0.08em; text-shadow: 0 0 10px rgba(0,0,0,0.9); z-index: 15;
+    pointer-events: none;
+  `;
+  deathBanner.textContent = 'YOUR MECH WAS DESTROYED -- watching the rest of the fight';
+  document.body.appendChild(deathBanner);
+}
+
 const postProcessing = await createPostProcessing(renderer, scene, camera);
 
 const loop = new GameLoop((dt) => {
@@ -310,12 +339,14 @@ const loop = new GameLoop((dt) => {
   if (audioManager) updateListener(audioManager, playerMech);
   updateHud(hud, playerMech, world);
 
+  checkPlayerDeathFeedback();
   checkWinCondition();
 
   postProcessing.render(dt);
 });
 
-loop.start();
+// loop.start() is called from the overlay click handler above, not here --
+// see that handler's comment for why.
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
