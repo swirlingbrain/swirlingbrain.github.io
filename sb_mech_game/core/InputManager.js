@@ -5,11 +5,14 @@ export class InputManager {
     this.keysDown = new Set();
     this.lookDeltaX = 0;
     this.lookDeltaY = 0;
+    this.fireHeld = false;
+    this.canvas = canvas;
 
     overlay.addEventListener('click', () => canvas.requestPointerLock());
 
     document.addEventListener('pointerlockchange', () => {
       overlay.style.display = document.pointerLockElement === canvas ? 'none' : 'flex';
+      if (document.pointerLockElement !== canvas) this.fireHeld = false;
     });
 
     document.addEventListener('keydown', (e) => this.keysDown.add(e.code));
@@ -20,6 +23,19 @@ export class InputManager {
       this.lookDeltaX += e.movementX;
       this.lookDeltaY += e.movementY;
     });
+
+    document.addEventListener('mousedown', (e) => {
+      if (document.pointerLockElement !== canvas || e.button !== 0) return;
+      this.fireHeld = true;
+    });
+    document.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
+      this.fireHeld = false;
+    });
+  }
+
+  isFireHeld() {
+    return this.fireHeld;
   }
 
   getMovementInputs() {
