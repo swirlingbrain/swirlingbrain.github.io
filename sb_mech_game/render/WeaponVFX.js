@@ -3,9 +3,12 @@
 // feedback for firing or destruction (only damage numbers + audio) -- real
 // user playtesting confirmed this made combat unintelligible ("can't see
 // any lasers or bullets... aimless wandering", "no mechs blow up or
-// anything"). This module is intentionally simple (THREE.Line tracers and
-// billboard-less spheres, not real particle systems) but gives every weapon
-// type and every kill a real, visible moment.
+// anything"). Beams/tracers are thin emissive cylinders rather than
+// THREE.Line: WebGL line width is capped at 1px on most platforms/GPUs
+// regardless of the material's linewidth setting, so a "line" would have
+// been nearly invisible on many machines -- a real cylinder has actual
+// screen-space thickness and picks up bloom via its emissive-equivalent
+// bright unlit color.
 
 import * as THREE from 'three';
 
@@ -15,10 +18,17 @@ const WEAPON_COLORS = {
   missile: 0xff9933,
 };
 
+const BEAM_RADII = {
+  laser: 0.05,
+  autocannon: 0.045,
+  missile: 0.07,
+};
+
 const BEAM_HEIGHT_OFFSET = 2; // roughly torso/weapon height above a mech's position
+const UP_AXIS = new THREE.Vector3(0, 1, 0);
 
 // Continuous laser beams: keyed by firing mech id so each mech's beam can be
-// rebuilt/cleared every tick without leaking previous frames' lines.
+// rebuilt/cleared every tick without leaking previous frames' geometry.
 const activeBeams = new Map();
 
 // One-shot effects (tracers, impact flashes, explosions) that fade/expire
@@ -27,13 +37,20 @@ const activeBeams = new Map();
 // timers if the match ends abruptly.
 const activeEffects = [];
 
-function makeLine(fromPos, toPos, color) {
-  const geometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(fromPos.x, fromPos.y + BEAM_HEIGHT_OFFSET, fromPos.z),
-    new THREE.Vector3(toPos.x, toPos.y + BEAM_HEIGHT_OFFSET, toPos.z),
-  ]);
-  const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
-  return new THREE.Line(geometry, material);
+/** A thin bright cylinder spanning two world points -- a "beam" with real screen-space thickness. */
+function makeBeamMesh(fromPos, toPos, color, radius) {
+  const from = new THREE.Vector3(fromPos.x, fromPos.y + BEAM_HEIGHT_OFFSET, fromPos.z);
+  const to = new THREE.Vector3(toPos.x, toPos.y + BEAM_HEIGHT_OFFSET, toPos.z);
+  const direction = new THREE.Vector3().subVectors(to, from);
+  const length = Math.max(direction.length(), 0.01);
+
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, 6, 1, true);
+  const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 });
+  const mesh = new THREE.Mesh(geometry, material);
+
+  mesh.position.copy(from).add(to).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(UP_AXIS, direction.normalize());
+  return mesh;
 }
 
 /** Call every tick a mech is actively laser-firing, with isFiring=true; call with isFiring=false (or on death) to clear its beam. */
@@ -46,21 +63,21 @@ export function updateLaserBeam(scene, mechId, fromPos, toPos, isFiring) {
     activeBeams.delete(mechId);
   }
   if (!isFiring) return;
-  const line = makeLine(fromPos, toPos, WEAPON_COLORS.laser);
-  scene.add(line);
-  activeBeams.set(mechId, line);
+  const beam = makeBeamMesh(fromPos, toPos, WEAPON_COLORS.laser, BEAM_RADII.laser);
+  scene.add(beam);
+  activeBeams.set(mechId, beam);
 }
 
 export function clearLaserBeam(scene, mechId) {
   updateLaserBeam(scene, mechId, null, null, false);
 }
 
-/** One-shot tracer line for a single-instant weapon (autocannon shot, missile volley launch). */
+/** One-shot tracer beam for a single-instant weapon (autocannon shot, missile volley launch). */
 export function spawnTracer(scene, fromPos, toPos, weaponType, durationSeconds = 0.12) {
-  const line = makeLine(fromPos, toPos, WEAPON_COLORS[weaponType] || 0xffffff);
-  scene.add(line);
+  const beam = makeBeamMesh(fromPos, toPos, WEAPON_COLORS[weaponType] || 0xffffff, BEAM_RADII[weaponType] || 0.05);
+  scene.add(beam);
   activeEffects.push({
-    mesh: line, remaining: durationSeconds, totalDuration: durationSeconds, growing: false,
+    mesh: beam, remaining: durationSeconds, totalDuration: durationSeconds, growing: false,
   });
 }
 
