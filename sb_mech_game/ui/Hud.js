@@ -153,6 +153,19 @@ function injectStyle() {
     .mech-hud-weapon-status.hud-critical { color: var(--hud-critical); }
 
     .mech-hud-throttle-readout { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
+
+    .mech-hud-reticle {
+      position: absolute; top: 50%; left: 50%; width: 28px; height: 28px;
+      transform: translate(-50%, -50%);
+    }
+    .mech-hud-reticle::before, .mech-hud-reticle::after {
+      content: ''; position: absolute; background: var(--hud-cyan);
+      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    .mech-hud-reticle::before { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-1px); }
+    .mech-hud-reticle::after { left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); }
+    .mech-hud-reticle.mech-hud-reticle-locked::before,
+    .mech-hud-reticle.mech-hud-reticle-locked::after { background: var(--hud-critical); }
   `;
   document.head.appendChild(style);
 }
@@ -166,6 +179,9 @@ export function createHud() {
 
   const container = el('div', 'mech-hud-root');
   document.body.appendChild(container);
+
+  // --- Reticle (screen center) ---
+  const reticleEl = el('div', 'mech-hud-reticle', container);
 
   // --- Radar (top-left) ---
   const radarPanel = el('div', 'mech-hud-panel mech-hud-radar', container);
@@ -225,6 +241,7 @@ export function createHud() {
 
   return {
     container,
+    reticleEl,
     radarCanvas,
     radarCtx,
     targetNameEl,
@@ -368,11 +385,20 @@ function updateThrottle(hudHandle, playerMech) {
   speedEl.textContent = `${playerMech.speed.toFixed(1)} u/s`;
 }
 
+// currentTargetId is set every tick by main.js's own reticle hit-test (the
+// same "nearest visible enemy within a tight facing cone" check that decides
+// whether weapons fire), so coloring the reticle from it is always accurate
+// to what firing the trigger right now would actually hit.
+function updateReticle(hudHandle, playerMech) {
+  hudHandle.reticleEl.classList.toggle('mech-hud-reticle-locked', !!playerMech.currentTargetId);
+}
+
 /**
  * Pushes current playerMech/world state into the HUD created by createHud().
  * Call once per rendered frame from Integration's main loop.
  */
 export function updateHud(hudHandle, playerMech, world) {
+  updateReticle(hudHandle, playerMech);
   updateRadar(hudHandle, playerMech, world);
   updateTarget(hudHandle, playerMech, world);
   updateHeat(hudHandle, playerMech);

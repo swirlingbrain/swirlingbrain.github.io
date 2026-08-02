@@ -10,6 +10,9 @@ import { createTerrain, getTerrainHeight, COVER_OBSTACLES } from './world/Terrai
 import { createPlaceholderMechMesh } from './render/MechMesh.js';
 import { updateCameraFromMech } from './render/CameraRig.js';
 import { createPostProcessing } from './render/PostProcessing.js';
+import {
+  updateLaserBeam, clearLaserBeam, spawnTracer, spawnImpactFlash, spawnExplosion, updateWeaponVfx,
+} from './render/WeaponVFX.js';
 import { createWorld, addMech } from './match/World.js';
 import {
   createWeapon, tickCooldown, fireLaserTick, fireAutocannon, fireMissileVolley, updateMissileLock,
@@ -180,15 +183,38 @@ function pickHitLocation() {
   return 'ct';
 }
 
+// The laser is heat-limited only (no cooldown gate), so it "fires" every
+// single tick it's held -- calling playWeaponFire every tick would trigger a
+// fresh 0.35s envelope 60 times a second, which is exactly what produced the
+// "deafening ringing" reported from real playtesting (dozens of overlapping
+// near-identical tones per second). Throttle it to roughly once per envelope
+// duration instead, per mech, so a sustained beam sounds like one sustained
+// tone rather than a machine-gunned pile of near-simultaneous copies of it.
+const LASER_SOUND_INTERVAL_SECONDS = 0.35;
+const laserSoundCooldown = new Map();
+function playLaserSoundThrottled(mechId, sourcePos, dt) {
+  const remaining = (laserSoundCooldown.get(mechId) || 0) - dt;
+  if (remaining <= 0) {
+    if (audioManager) playWeaponFire(audioManager, 'laser', sourcePos);
+    laserSoundCooldown.set(mechId, LASER_SOUND_INTERVAL_SECONDS);
+  } else {
+    laserSoundCooldown.set(mechId, remaining);
+  }
+}
+
 // Shared fire/cooldown/lock tick for both the player and every AI mech.
 // Cooldown and missile-lock progress always tick (natural recovery/dwell);
 // the actual fire attempt only happens if wantsToFire is true AND a target
 // exists -- firing into empty space is skipped entirely rather than wasting
 // ammo/heat, a deliberate simplification given there's no real projectile
-// travel/miss simulation in this pass.
+// travel/miss simulation in this pass. Also drives the visible laser
+// beam/tracer/impact-flash effects from render/WeaponVFX.js, since real user
+// playtesting confirmed combat was unintelligible with zero visual feedback
+// for what was being fired or at whom.
 function tickMechWeapons(mech, target, wantsToFire, dt) {
   if (!mech.alive) return;
   const sourcePos = mech.position;
+  const canFireNow = !mech.shutdown && wantsToFire && !!target && target.alive;
 
   for (const weapon of mech.weapons) {
     tickCooldown(weapon, dt);
@@ -196,16 +222,27 @@ function tickMechWeapons(mech, target, wantsToFire, dt) {
       updateMissileLock(weapon, dt, !!target && wantsToFire);
     }
 
-    if (mech.shutdown || !wantsToFire || !target || !target.alive) continue;
-
     if (weapon.type === 'laser') {
-      const damage = fireLaserTick(weapon, mech, dt);
-      applyDamage(target, pickHitLocation(), damage);
-      if (audioManager) playWeaponFire(audioManager, 'laser', sourcePos);
-    } else if (weapon.type === 'autocannon') {
+      if (canFireNow) {
+        const damage = fireLaserTick(weapon, mech, dt);
+        applyDamage(target, pickHitLocation(), damage);
+        updateLaserBeam(scene, mech.id, sourcePos, target.position, true);
+        playLaserSoundThrottled(mech.id, sourcePos, dt);
+      } else {
+        clearLaserBeam(scene, mech.id);
+        laserSoundCooldown.delete(mech.id);
+      }
+      continue;
+    }
+
+    if (!canFireNow) continue;
+
+    if (weapon.type === 'autocannon') {
       const result = fireAutocannon(weapon, mech);
       if (result) {
         applyDamage(target, pickHitLocation(), result.damage);
+        spawnTracer(scene, sourcePos, target.position, 'autocannon');
+        spawnImpactFlash(scene, target.position);
         if (audioManager) {
           playWeaponFire(audioManager, 'autocannon', sourcePos);
           playImpact(audioManager, target.position, result.damage);
@@ -217,12 +254,31 @@ function tickMechWeapons(mech, target, wantsToFire, dt) {
         for (let i = 0; i < result.missileCount; i += 1) {
           applyDamage(target, pickHitLocation(), result.damagePerMissile);
         }
+        spawnTracer(scene, sourcePos, target.position, 'missile', 0.25);
+        spawnImpactFlash(scene, target.position, 1.5);
         if (audioManager) {
           playWeaponFire(audioManager, 'missile', sourcePos);
           playImpact(audioManager, target.position, result.damagePerMissile * result.missileCount);
         }
       }
     }
+  }
+}
+
+// Destruction feedback: previously a destroyed mech's mesh just kept sitting
+// there motionless, indistinguishable at a glance from an idle-but-alive one
+// -- real playtesting reported "sometimes says defeat, sometimes victory...
+// no mechs blow up or anything." Each mech gets exactly one explosion +
+// mesh removal the instant mech.alive first goes false.
+const deathHandled = new Set();
+function handleMechDeaths() {
+  for (const mech of world.mechs) {
+    if (mech.alive || deathHandled.has(mech.id)) continue;
+    deathHandled.add(mech.id);
+    spawnExplosion(scene, mech.position);
+    clearLaserBeam(scene, mech.id);
+    const meshHandle = meshHandles.get(mech.id);
+    if (meshHandle) meshHandle.root.visible = false;
   }
 }
 
@@ -342,6 +398,9 @@ const loop = new GameLoop((dt) => {
 
   if (audioManager) updateListener(audioManager, playerMech);
   updateHud(hud, playerMech, world);
+
+  handleMechDeaths();
+  updateWeaponVfx(scene, dt);
 
   checkPlayerDeathFeedback();
   checkWinCondition();
