@@ -1,5 +1,6 @@
 import { HEAT_SHUTDOWN_THRESHOLD } from '../mech/MechConstants.js';
 import { SENSOR_RANGE, RETREAT_ARMOR_FRACTION, RETREAT_HEAT_FRACTION } from './AiConstants.js';
+import { COVER_OBSTACLES, isLineOfSightBlocked } from '../world/TerrainConstants.js';
 
 function distanceBetween(a, b) {
   const dx = a.position.x - b.position.x;
@@ -8,15 +9,19 @@ function distanceBetween(a, b) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-// Phase 1 simplification: visibility is a pure distance + team + alive check,
-// with no raycasting/occlusion. Real line-of-sight is a later-polish item,
-// not required now.
-export function findVisibleEnemies(mech, allMechs) {
+// obstacles defaults to the real map's COVER_OBSTACLES but is overridable so
+// tests can check blocking behavior with synthetic obstacles instead of
+// depending on real map coordinates. Previously this was a pure distance +
+// team + alive check with no raycasting/occlusion at all -- real playtesting
+// asked for cover that actually stops shots, not just movement, so an enemy
+// behind a rock/ruin is now excluded even if it's within sensor range.
+export function findVisibleEnemies(mech, allMechs, obstacles = COVER_OBSTACLES) {
   return allMechs.filter((other) => (
     other.id !== mech.id
     && other.team !== mech.team
     && other.alive
     && distanceBetween(mech, other) <= SENSOR_RANGE
+    && !isLineOfSightBlocked(mech.position, other.position, obstacles)
   ));
 }
 

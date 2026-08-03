@@ -151,3 +151,76 @@ export function createMetalMaterial(baseColorHex, seed = 1) {
     roughness: 0.55,
   });
 }
+
+/**
+ * Draws a mottled stone/rock albedo texture: blotchy mineral-variation
+ * patches and irregular crack lines, rather than the metal texture's panel
+ * seams/rivets (which read as unmistakably mechanical, wrong for natural
+ * rock or crumbled masonry).
+ */
+export function createRockAlbedoTexture(baseColorHex, seed = 1, size = 256) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const rgb = hexToRgb(baseColorHex);
+  const rand = seededRandom(seed);
+
+  ctx.fillStyle = shade(rgb, 1);
+  ctx.fillRect(0, 0, size, size);
+
+  // Soft-edged mineral-variation blotches.
+  const blotchCount = 18 + Math.floor(rand() * 14);
+  for (let i = 0; i < blotchCount; i += 1) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const r = size * (0.06 + rand() * 0.16);
+    const factor = 0.7 + rand() * 0.6;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, shade(rgb, factor));
+    grad.addColorStop(1, shade(rgb, 1));
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Irregular jagged crack lines (multi-segment, unlike the metal texture's
+  // straight scratches) suggesting fractured stone.
+  const crackCount = 5 + Math.floor(rand() * 5);
+  ctx.strokeStyle = shade(rgb, 0.35);
+  for (let i = 0; i < crackCount; i += 1) {
+    let x = rand() * size;
+    let y = rand() * size;
+    ctx.globalAlpha = 0.4 + rand() * 0.3;
+    ctx.lineWidth = 1 + rand();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const segments = 3 + Math.floor(rand() * 4);
+    for (let s = 0; s < segments; s += 1) {
+      x += (rand() - 0.5) * size * 0.18;
+      y += (rand() - 0.5) * size * 0.18;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Ready-to-use rock/masonry MeshStandardMaterial: low metalness, high roughness (unlike metal armor's 0.75/0.55). */
+export function createRockMaterial(baseColorHex, seed = 1) {
+  return new THREE.MeshStandardMaterial({
+    map: createRockAlbedoTexture(baseColorHex, seed),
+    roughnessMap: createMetalRoughnessTexture(seed),
+    metalness: 0.05,
+    roughness: 0.95,
+  });
+}

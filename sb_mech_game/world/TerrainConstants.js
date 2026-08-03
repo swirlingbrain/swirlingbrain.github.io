@@ -13,16 +13,60 @@ export const TERRAIN_SIZE = 200;
 export const HEIGHT_SCALE = 8;
 const NOISE_FREQUENCY = 0.045;
 
-// Approximate bounding circles around the rock cluster and ruined structure,
-// sized to cover their actual generated extent (see Terrain.js's
-// buildRockCluster/buildRuinedStructure). Used by Integration for
-// mech-vs-terrain-prop collision (a cheap circle check rather than full mesh
-// collision, since a mech's plan-view footprint is roughly circular) and by
-// AI as cover-seeking destinations when retreating.
+// Approximate bounding circles around each cover cluster, sized to cover its
+// actual generated extent (see Terrain.js's buildRockCluster/
+// buildRuinedStructure). Used by Integration for mech-vs-terrain-prop
+// collision (a cheap circle check rather than full mesh collision, since a
+// mech's plan-view footprint is roughly circular), by AI as cover-seeking
+// destinations when retreating, and by isLineOfSightBlocked below to block
+// weapon targeting -- real user playtesting found the original 2 obstacles
+// sat off in the map's corners, away from the lane mechs actually fight
+// along (spawns face each other across the x axis near z=0), so a typical
+// match never encountered any cover at all. These 6 are spread across that
+// central engagement band instead. `type` picks which mesh Terrain.js builds
+// at that position ('rock' or 'ruin'); every obstacle is tall enough (see
+// Terrain.js) to block line of sight regardless of type.
+// Kept clear of the x=0 and z=0 axes by a comfortable margin beyond each
+// radius -- several unit tests place a mech at the default (0,0,0) and an
+// enemy directly along one axis (e.g. z=-50 with x=0) to test facing/cone
+// logic; an obstacle straddling that exact line would silently fail those
+// tests by blocking line of sight the test never intended to exercise.
 export const COVER_OBSTACLES = [
-  { x: 45, z: -35, radius: 14 },
-  { x: -50, z: 40, radius: 13 },
+  { x: 45, z: -35, radius: 14, type: 'rock' },
+  { x: -50, z: 40, radius: 13, type: 'ruin' },
+  { x: 20, z: 18, radius: 11, type: 'rock' },
+  { x: -25, z: -20, radius: 12, type: 'ruin' },
+  { x: 8, z: 32, radius: 10, type: 'ruin' },
+  { x: -18, z: -30, radius: 11, type: 'rock' },
 ];
+
+// Treats each obstacle as a full-height vertical cylinder (a reasonable
+// simplification: every cover mesh Terrain.js builds is already taller than
+// a mech's weapon-mounting height) and does a 2D segment-vs-circle
+// intersection test in the x/z plane, ignoring y entirely. Shared by AI
+// targeting and the player's own hit-test so both respect the same cover.
+function distancePointToSegment(px, pz, ax, az, bx, bz) {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const abLengthSquared = abx * abx + abz * abz;
+  let t = abLengthSquared > 0 ? ((px - ax) * abx + (pz - az) * abz) / abLengthSquared : 0;
+  t = Math.max(0, Math.min(1, t));
+  const closestX = ax + abx * t;
+  const closestZ = az + abz * t;
+  const dx = px - closestX;
+  const dz = pz - closestZ;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+export function isLineOfSightBlocked(fromPos, toPos, obstacles = COVER_OBSTACLES) {
+  for (const obstacle of obstacles) {
+    const dist = distancePointToSegment(
+      obstacle.x, obstacle.z, fromPos.x, fromPos.z, toPos.x, toPos.z,
+    );
+    if (dist < obstacle.radius) return true;
+  }
+  return false;
+}
 
 // --- Deterministic value-noise height field (no external noise library
 // needed, no CDN dependency beyond three itself for the mesh-building side) ---
