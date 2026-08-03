@@ -4,6 +4,7 @@ import {
   AI_IDLE_THROTTLE, AI_RETREAT_ARRIVAL_DISTANCE, AI_LOOK_TURN_RATE,
 } from './AiConstants.js';
 import { COVER_OBSTACLES } from '../world/TerrainConstants.js';
+import { angleBetween, normalizeAngle } from '../match/Combat.js';
 
 function distanceBetween(a, b) {
   const dx = a.position.x - b.position.x;
@@ -11,20 +12,10 @@ function distanceBetween(a, b) {
   return Math.sqrt(dx * dx + dz * dz);
 }
 
-// Angle (in the same convention as mech.legYaw/torsoYaw) that points from
-// `from` to `to`, matching mech/MechState.js's integrateMovement, where a
-// mech facing angle theta moves along (-sin(theta), -cos(theta)).
+// Thin wrapper: angleBetween takes plain positions, everything in this file
+// works in terms of mechs (which carry a .position).
 function angleTo(from, to) {
-  const dx = to.position.x - from.position.x;
-  const dz = to.position.z - from.position.z;
-  return Math.atan2(-dx, -dz);
-}
-
-function normalizeAngle(angle) {
-  let a = angle;
-  while (a > Math.PI) a -= Math.PI * 2;
-  while (a < -Math.PI) a += Math.PI * 2;
-  return a;
+  return angleBetween(from.position, to.position);
 }
 
 function facingAngle(mech) {

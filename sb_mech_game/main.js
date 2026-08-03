@@ -15,6 +15,9 @@ import {
 } from './render/WeaponVFX.js';
 import { createWorld, addMech } from './match/World.js';
 import {
+  angleBetween, normalizeAngle, pickHitLocation,
+} from './match/Combat.js';
+import {
   createWeapon, tickCooldown, fireLaserTick, fireAutocannon, fireMissileVolley, updateMissileLock,
 } from './weapons/WeaponState.js';
 import { findVisibleEnemies } from './ai/Targeting.js';
@@ -149,19 +152,6 @@ function resolveObstacleCollisions(mech) {
 // nearest visible enemy within a tight facing cone of the camera direction.
 const PLAYER_FIRE_CONE_RADIANS = Math.PI / 18; // ~10 degrees
 
-function angleBetween(fromPos, toPos) {
-  const dx = toPos.x - fromPos.x;
-  const dz = toPos.z - fromPos.z;
-  return Math.atan2(-dx, -dz);
-}
-
-function normalizeAngle(angle) {
-  let a = angle;
-  while (a > Math.PI) a -= Math.PI * 2;
-  while (a < -Math.PI) a += Math.PI * 2;
-  return a;
-}
-
 function pickPlayerTarget(mech, worldState) {
   const visible = findVisibleEnemies(mech, worldState.mechs);
   if (visible.length === 0) return null;
@@ -178,20 +168,6 @@ function pickPlayerTarget(mech, worldState) {
   return best;
 }
 
-// Weighted hit-location table approximating real mech combat's center-mass
-// bias (no real raycasting against body geometry in this Phase 1 pass).
-const HIT_LOCATION_TABLE = [
-  ['ct', 0.28], ['lt', 0.14], ['rt', 0.14], ['la', 0.11], ['ra', 0.11],
-  ['ll', 0.10], ['rl', 0.10], ['head', 0.02],
-];
-function pickHitLocation() {
-  let r = Math.random();
-  for (const [key, weight] of HIT_LOCATION_TABLE) {
-    if (r < weight) return key;
-    r -= weight;
-  }
-  return 'ct';
-}
 
 // The laser is heat-limited only (no cooldown gate), so it "fires" every
 // single tick it's held -- calling playWeaponFire every tick would trigger a
@@ -326,7 +302,14 @@ function checkWinCondition() {
   matchOver = true;
   loop.stop();
   if (audioManager) stopAmbientLoop(audioManager);
-  showMatchResult(alliesAlive ? 'VICTORY' : 'DEFEAT');
+  // A single tick can resolve the last mech on both teams at once (e.g. a
+  // missile volley's damage and another mech's laser tick both land their
+  // killing blow before this check runs) -- treating that as DEFEAT would
+  // misreport a mutual wipeout as a loss.
+  let resultText = 'DRAW';
+  if (alliesAlive) resultText = 'VICTORY';
+  else if (enemiesAlive) resultText = 'DEFEAT';
+  showMatchResult(resultText);
 }
 
 // Player death feedback: previously, once playerMech.alive went false, all

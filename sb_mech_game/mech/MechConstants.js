@@ -11,12 +11,20 @@ export const HEAT_DECAY_RATE = 6;
 export const HEAT_SHUTDOWN_THRESHOLD = 90;
 export const HEAT_SHUTDOWN_RECOVERY = 40;
 
+// Doubled from the original Phase 1 values after real playtesting kept
+// reporting "dies too easily" even with cover added. A worst-case
+// simulation (all 4 enemies converging fire on one target with perfect
+// aim/no misses) showed the original armor pool died in ~1.5s median --
+// not enough time for a human to notice and react, let alone retreat.
+// Doubling brought that same worst case to ~2.3s median (3.8s max) and a
+// realistic single-enemy duel to ~7.4s median, without needing a 3x+ bump
+// that would make ordinary 1-on-1 fights drag.
 export const DEFAULT_LOCATION_ARMOR = {
-  head: 18, ct: 40, lt: 28, rt: 28, la: 20, ra: 20, ll: 24, rl: 24,
+  head: 36, ct: 80, lt: 56, rt: 56, la: 40, ra: 40, ll: 48, rl: 48,
 };
 
 export const DEFAULT_LOCATION_STRUCTURE = {
-  head: 9, ct: 20, lt: 14, rt: 14, la: 10, ra: 10, ll: 12, rl: 12,
+  head: 18, ct: 40, lt: 28, rt: 28, la: 20, ra: 20, ll: 24, rl: 24,
 };
 
 // medium MUST stay {1, 1, 1}: every two-argument createMech(id, team) call
