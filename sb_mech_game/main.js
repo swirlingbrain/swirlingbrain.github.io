@@ -111,6 +111,16 @@ overlay.addEventListener('click', () => {
   // (a no-op if already running), so this is safe even if the overlay is
   // clicked again after a pointer-lock loss and reclick.
   loop.start();
+  // Hide the overlay directly on click rather than relying solely on
+  // InputManager's pointerlockchange handler. Pointer lock can fail to
+  // engage for reasons unrelated to the player's intent (timing, browser
+  // policy, focus state) -- when it does, pointerlockchange never fires and
+  // the overlay was staying stuck on screen forever, blocking the entire
+  // game behind an opaque panel even though the match was actually running.
+  // InputManager's own listener still re-shows it if pointer lock is lost
+  // mid-match (e.g. pressing Escape), which is the intended "click to
+  // resume" behavior.
+  overlay.style.display = 'none';
 });
 
 // Cheap circle-vs-circle collision against terrain props (rock cluster,
@@ -192,10 +202,22 @@ function pickHitLocation() {
 // tone rather than a machine-gunned pile of near-simultaneous copies of it.
 const LASER_SOUND_INTERVAL_SECONDS = 0.35;
 const laserSoundCooldown = new Map();
+
+// Deterministic per-mech pitch detune (+/- ~6%) so up to 8 mechs firing the
+// identical laser tone at once don't reinforce into a single piercing pitch.
+const pitchMultiplierByMechId = new Map();
+function pitchMultiplierFor(mechId) {
+  if (!pitchMultiplierByMechId.has(mechId)) {
+    const hash = Array.from(mechId).reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+    pitchMultiplierByMechId.set(mechId, 0.94 + (hash % 13) * 0.01);
+  }
+  return pitchMultiplierByMechId.get(mechId);
+}
+
 function playLaserSoundThrottled(mechId, sourcePos, dt) {
   const remaining = (laserSoundCooldown.get(mechId) || 0) - dt;
   if (remaining <= 0) {
-    if (audioManager) playWeaponFire(audioManager, 'laser', sourcePos);
+    if (audioManager) playWeaponFire(audioManager, 'laser', sourcePos, pitchMultiplierFor(mechId));
     laserSoundCooldown.set(mechId, LASER_SOUND_INTERVAL_SECONDS);
   } else {
     laserSoundCooldown.set(mechId, remaining);

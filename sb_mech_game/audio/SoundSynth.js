@@ -3,14 +3,19 @@
 // Node-less browser test harness (which has no real AudioContext).
 
 const WEAPON_FIRE_ENVELOPES = {
-  // Laser: sustained, higher-pitched tone.
+  // Laser: sustained, higher-pitched tone. Total envelope time (attack +
+  // decay + duration) must stay under main.js's LASER_SOUND_INTERVAL_SECONDS
+  // (0.35s) -- an earlier version summed to 0.57s, so each retrigger started
+  // before the previous one's tail finished, and with the laser refiring
+  // every tick it's held, that self-overlap built into a continuous drone
+  // ("ringing") rather than a series of distinct tones.
   laser: {
     frequency: 1400,
-    duration: 0.35,
+    duration: 0.15,
     waveform: 'sine',
     attackSeconds: 0.02,
-    decaySeconds: 0.2,
-    amplitude: 0.6,
+    decaySeconds: 0.1,
+    amplitude: 0.55,
   },
   // Autocannon: short, sharp, low-frequency punch.
   autocannon: {

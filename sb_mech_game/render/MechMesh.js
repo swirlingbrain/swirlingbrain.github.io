@@ -16,7 +16,7 @@ import { createMetalMaterial } from './ProceduralTextures.js';
 // torso) while assault has the lowest (bulky torso dominates); torso width
 // grows the most dramatically across the light -> assault range, which is
 // the primary silhouette read at a glance.
-const CHASSIS_MESH_DIMS = {
+export const CHASSIS_MESH_DIMS = {
   light: {
     legWidth: 0.5, legHeight: 1.91, legOffsetX: 0.39,
     torsoWidth: 1.28, torsoHeight: 1.25, torsoDepth: 0.8,

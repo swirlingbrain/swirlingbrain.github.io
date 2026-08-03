@@ -185,8 +185,14 @@ export function updateListener(audioManager, listenerMech) {
   audioManager.listenerMech = listenerMech;
 }
 
-export function playWeaponFire(audioManager, weaponType, sourcePosition) {
+// pitchMultiplier (default 1, i.e. no change) lets callers detune a shot
+// slightly per-source. With up to 8 mechs able to fire lasers at once, all
+// playing the exact same 1400Hz sine, simultaneous shots reinforce into one
+// piercing tone instead of reading as several distinct ones -- a small
+// per-mech detune breaks that reinforcement up.
+export function playWeaponFire(audioManager, weaponType, sourcePosition, pitchMultiplier = 1) {
   const envelope = buildWeaponFireEnvelope(weaponType);
+  if (pitchMultiplier !== 1) envelope.frequency *= pitchMultiplier;
   playEnvelope(audioManager, envelope, sourcePosition);
 }
 
