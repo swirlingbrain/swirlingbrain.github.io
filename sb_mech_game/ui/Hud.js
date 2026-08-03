@@ -26,17 +26,81 @@ const RADAR_PIXEL_RADIUS = 64;
 const RADAR_CANVAS_SIZE = 150;
 
 const WEAPON_SLOT_COUNT = 4;
+const ROSTER_SLOT_COUNT = 4;
 
-const ARMOR_LOCATIONS = [
-  { key: 'head', label: 'HD' },
-  { key: 'la', label: 'LA' },
-  { key: 'lt', label: 'LT' },
-  { key: 'ct', label: 'CT' },
-  { key: 'rt', label: 'RT' },
-  { key: 'ra', label: 'RA' },
-  { key: 'll', label: 'LL' },
-  { key: 'rl', label: 'RL' },
+// Front-view humanoid/mech silhouette (head on top, torso with distinct
+// left/center/right sections, arms hanging at the sides, legs at the
+// bottom) drawn as SVG rects in a 0-120 x 0-134 viewBox. Real playtesting
+// asked for the armor display to be "more humanoid shaped" so it's easy to
+// tell which part has damage at a glance -- the previous version used a
+// uniform grid of same-sized squares, which read as a spreadsheet rather
+// than a body.
+const PAPERDOLL_PARTS = [
+  { key: 'head', label: 'HD', x: 50, y: 0, w: 20, h: 18 },
+  { key: 'la', label: 'LA', x: 2, y: 24, w: 20, h: 56 },
+  { key: 'lt', label: 'LT', x: 25, y: 20, w: 21, h: 48 },
+  { key: 'ct', label: 'CT', x: 47.5, y: 18, w: 25, h: 52 },
+  { key: 'rt', label: 'RT', x: 74, y: 20, w: 21, h: 48 },
+  { key: 'ra', label: 'RA', x: 98, y: 24, w: 20, h: 56 },
+  { key: 'll', label: 'LL', x: 34, y: 70, w: 24, h: 62 },
+  { key: 'rl', label: 'RL', x: 62, y: 70, w: 24, h: 62 },
 ];
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Builds one humanoid paperdoll SVG inside `parent`. Returns {key: <rect>} for updateArmorCells(). */
+function buildArmorPaperdoll(parent, extraClassName) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 120 134');
+  svg.setAttribute('class', `mech-hud-paperdoll${extraClassName ? ` ${extraClassName}` : ''}`);
+  const cells = {};
+  for (const part of PAPERDOLL_PARTS) {
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('x', part.x);
+    rect.setAttribute('y', part.y);
+    rect.setAttribute('width', part.w);
+    rect.setAttribute('height', part.h);
+    rect.setAttribute('rx', 3);
+    rect.setAttribute('class', 'mech-hud-paperdoll-part hud-good');
+    svg.appendChild(rect);
+
+    const text = document.createElementNS(SVG_NS, 'text');
+    text.setAttribute('x', part.x + part.w / 2);
+    text.setAttribute('y', part.y + part.h / 2 + 3);
+    text.setAttribute('class', 'mech-hud-paperdoll-label');
+    text.textContent = part.label;
+    svg.appendChild(text);
+
+    cells[part.key] = rect;
+  }
+  parent.appendChild(svg);
+  return cells;
+}
+
+/** Colors each paperdoll part by the given mech's actual per-location armor. Shared by the player's own paperdoll and the target's mini paperdoll. */
+function updateArmorCells(cells, mech) {
+  for (const { key } of PAPERDOLL_PARTS) {
+    const loc = mech.locations[key];
+    const cell = cells[key];
+    if (!loc || !cell) continue;
+    if (loc.destroyed) {
+      cell.classList.remove(...STATUS_CLASSES);
+      cell.classList.add('mech-hud-destroyed');
+      continue;
+    }
+    cell.classList.remove('mech-hud-destroyed');
+    const armorFraction = loc.maxArmor > 0 ? loc.armor / loc.maxArmor : 0;
+    setStatusClass(cell, heatToColor(1 - armorFraction));
+  }
+}
+
+/** 'enemy-2' -> 'E2', 'ally-1' -> 'A1' -- compact enough for the roster list. */
+function abbreviateMechId(id) {
+  const match = /^([a-zA-Z]+)-?(\d+)?$/.exec(id);
+  if (!match) return id.slice(0, 4).toUpperCase();
+  const prefix = match[1][0].toUpperCase();
+  return match[2] ? `${prefix}${match[2]}` : match[1].slice(0, 4).toUpperCase();
+}
 
 const STATUS_CLASSES = ['hud-good', 'hud-warn', 'hud-critical'];
 
@@ -86,6 +150,7 @@ function injectStyle() {
       margin-bottom: 4px;
     }
     .mech-hud-radar { top: 16px; left: 16px; width: ${RADAR_CANVAS_SIZE}px; }
+    .mech-hud-roster { top: ${16 + RADAR_CANVAS_SIZE + 12}px; left: 16px; width: ${RADAR_CANVAS_SIZE}px; }
     .mech-hud-target { top: 16px; right: 16px; min-width: 170px; text-align: right; }
     .mech-hud-heat {
       top: 50%; right: 16px; transform: translateY(-50%);
@@ -123,25 +188,44 @@ function injectStyle() {
     .mech-hud-shutdown.mech-hud-visible { opacity: 1; }
     @keyframes mech-hud-blink { 50% { opacity: 0.15; } }
 
-    .mech-hud-armor-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 30px);
-      grid-template-rows: repeat(3, 22px);
-      grid-template-areas:
-        ".  .  head head ."
-        "la lt ct   rt    ra"
-        ".  ll ll   rl    rl";
-      gap: 3px;
+    .mech-hud-paperdoll {
+      display: block; width: 92px; height: 103px; margin: 2px auto 4px;
+      overflow: visible;
     }
-    .mech-hud-armor-cell {
-      display: flex; align-items: center; justify-content: center;
-      font-size: 9px; border-radius: 2px;
-      background: var(--hud-good); color: #041a1a; font-weight: bold;
+    .mech-hud-paperdoll.mech-hud-paperdoll-small {
+      width: 54px; height: 60px; margin: 6px 0 6px auto;
     }
-    .mech-hud-armor-cell.hud-good { background: var(--hud-good); }
-    .mech-hud-armor-cell.hud-warn { background: var(--hud-warn); }
-    .mech-hud-armor-cell.hud-critical { background: var(--hud-critical); }
-    .mech-hud-armor-cell.mech-hud-destroyed { background: #333; color: #888; }
+    .mech-hud-paperdoll-part {
+      fill: var(--hud-good); stroke: rgba(4,20,26,0.7); stroke-width: 2;
+      transition: fill 120ms linear;
+    }
+    .mech-hud-paperdoll-part.hud-good { fill: var(--hud-good); }
+    .mech-hud-paperdoll-part.hud-warn { fill: var(--hud-warn); }
+    .mech-hud-paperdoll-part.hud-critical { fill: var(--hud-critical); }
+    .mech-hud-paperdoll-part.mech-hud-destroyed { fill: #333; }
+    .mech-hud-paperdoll-label {
+      font-size: 9px; font-family: 'Consolas', 'Courier New', monospace;
+      font-weight: bold; fill: #041a1a; text-anchor: middle; pointer-events: none;
+    }
+    .mech-hud-paperdoll-small .mech-hud-paperdoll-label { font-size: 11px; }
+
+    .mech-hud-roster-row {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+      padding: 2px; border-radius: 2px; border: 1px solid transparent;
+    }
+    .mech-hud-roster-row.mech-hud-roster-locked {
+      border-color: var(--hud-critical);
+      box-shadow: 0 0 6px rgba(255, 59, 59, 0.5);
+    }
+    .mech-hud-roster-label { font-size: 10px; width: 24px; text-align: left; opacity: 0.85; }
+    .mech-hud-roster-track {
+      flex: 1; height: 6px; background: rgba(127,231,255,0.12);
+      border: 1px solid var(--hud-border); border-radius: 2px; overflow: hidden;
+    }
+    .mech-hud-roster-fill { height: 100%; width: 0%; background: var(--hud-good); transition: width 80ms linear; }
+    .mech-hud-roster-fill.hud-good { background: var(--hud-good); }
+    .mech-hud-roster-fill.hud-warn { background: var(--hud-warn); }
+    .mech-hud-roster-fill.hud-critical { background: var(--hud-critical); }
 
     .mech-hud-weapon-row {
       display: flex; justify-content: space-between; font-size: 11px;
@@ -191,13 +275,34 @@ export function createHud() {
   radarCanvas.height = RADAR_CANVAS_SIZE - 20;
   const radarCtx = radarCanvas.getContext('2d');
 
-  // --- Target info (top-right) ---
+  // --- Enemy roster (left edge, below radar): every enemy's overall status
+  // at a glance, labeled by id and highlighting whichever one is currently
+  // locked -- real playtesting: "it would be nice to have something on the
+  // hud that shows the status of each enemy mech," and "hard to know which
+  // [bar] applies to" which mech. Kept as its own panel on the left (instead
+  // of packed into TARGET on the right) so the right column doesn't grow
+  // tall enough to collide with the heat gauge below it.
+  const rosterPanel = el('div', 'mech-hud-panel mech-hud-roster', container);
+  el('div', 'mech-hud-label', rosterPanel).textContent = 'ENEMIES';
+  const rosterRows = [];
+  for (let i = 0; i < ROSTER_SLOT_COUNT; i += 1) {
+    const row = el('div', 'mech-hud-roster-row', rosterPanel);
+    const labelEl = el('span', 'mech-hud-roster-label', row);
+    const track = el('div', 'mech-hud-roster-track', row);
+    const fillEl = el('div', 'mech-hud-roster-fill', track);
+    rosterRows.push({ row, labelEl, fillEl });
+  }
+
+  // --- Target info (top-right): locked/nearest enemy's name+range+health,
+  // plus a mini paperdoll of THAT enemy's per-location damage (real
+  // playtesting: "hard to know which part of the enemy mech has damage").
   const targetPanel = el('div', 'mech-hud-panel mech-hud-target', container);
   el('div', 'mech-hud-label', targetPanel).textContent = 'TARGET';
   const targetNameEl = el('div', 'mech-hud-target-name', targetPanel);
   const targetRangeEl = el('div', 'mech-hud-target-range', targetPanel);
   const targetHealthTrack = el('div', 'mech-hud-bar-track', targetPanel);
   const targetHealthFillEl = el('div', 'mech-hud-bar-fill', targetHealthTrack);
+  const targetPaperdollCells = buildArmorPaperdoll(targetPanel, 'mech-hud-paperdoll-small');
 
   // --- Heat gauge (right edge) ---
   const heatPanel = el('div', 'mech-hud-panel mech-hud-heat', container);
@@ -210,14 +315,7 @@ export function createHud() {
 
   // --- Armor paperdoll (bottom-center) ---
   const armorPanel = el('div', 'mech-hud-panel mech-hud-armor', container);
-  const armorGrid = el('div', 'mech-hud-armor-grid', armorPanel);
-  const armorCells = {};
-  for (const { key, label } of ARMOR_LOCATIONS) {
-    const cell = el('div', 'mech-hud-armor-cell', armorGrid);
-    cell.style.gridArea = key;
-    cell.textContent = label;
-    armorCells[key] = cell;
-  }
+  const armorCells = buildArmorPaperdoll(armorPanel);
 
   // --- Weapon groups (bottom-right) ---
   const weaponsPanel = el('div', 'mech-hud-panel mech-hud-weapons', container);
@@ -247,6 +345,8 @@ export function createHud() {
     targetNameEl,
     targetRangeEl,
     targetHealthFillEl,
+    targetPaperdollCells,
+    rosterRows,
     heatFillEl,
     heatPercentEl,
     shutdownEl,
@@ -291,7 +391,9 @@ function updateRadar(hudHandle, playerMech, world) {
 }
 
 function updateTarget(hudHandle, playerMech, world) {
-  const { targetNameEl, targetRangeEl, targetHealthFillEl } = hudHandle;
+  const {
+    targetNameEl, targetRangeEl, targetHealthFillEl, targetPaperdollCells,
+  } = hudHandle;
 
   let target = null;
   if (playerMech.currentTargetId) {
@@ -306,7 +408,12 @@ function updateTarget(hudHandle, playerMech, world) {
     targetNameEl.textContent = 'NO TARGET';
     targetRangeEl.textContent = '';
     targetHealthFillEl.style.width = '0%';
-    return;
+    for (const { key } of PAPERDOLL_PARTS) {
+      const cell = targetPaperdollCells[key];
+      cell.classList.remove('mech-hud-destroyed');
+      setStatusClass(cell, 'good');
+    }
+    return null;
   }
 
   const range = distanceBetween(playerMech.position, target.position);
@@ -316,6 +423,34 @@ function updateTarget(hudHandle, playerMech, world) {
   targetRangeEl.textContent = `${Math.round(range)}m`;
   targetHealthFillEl.style.width = `${Math.max(0, Math.min(1, healthFraction)) * 100}%`;
   setStatusClass(targetHealthFillEl, heatToColor(1 - healthFraction));
+  updateArmorCells(targetPaperdollCells, target);
+  return target;
+}
+
+// Shows every currently-alive enemy's overall health, not just the locked
+// one -- real playtesting: "it would be nice to have something on the hud
+// that shows the status of each enemy mech." Mirrors updateRadar's own
+// enemy list/team-color logic (position awareness is already unconditional
+// there regardless of cover) so this stays consistent with what the radar
+// already reveals rather than adding a new, different visibility rule.
+function updateRoster(hudHandle, playerMech, world, lockedTargetId) {
+  const { rosterRows } = hudHandle;
+  const enemies = world.mechs.filter((m) => m.team !== playerMech.team && m.alive);
+
+  for (let i = 0; i < rosterRows.length; i += 1) {
+    const { row, labelEl, fillEl } = rosterRows[i];
+    const enemy = enemies[i];
+    if (!enemy) {
+      row.style.display = 'none';
+      continue;
+    }
+    row.style.display = 'flex';
+    row.classList.toggle('mech-hud-roster-locked', enemy.id === lockedTargetId);
+    labelEl.textContent = abbreviateMechId(enemy.id);
+    const healthFraction = computeHealthFraction(enemy);
+    fillEl.style.width = `${Math.max(0, Math.min(1, healthFraction)) * 100}%`;
+    setStatusClass(fillEl, heatToColor(1 - healthFraction));
+  }
 }
 
 function updateHeat(hudHandle, playerMech) {
@@ -330,20 +465,7 @@ function updateHeat(hudHandle, playerMech) {
 }
 
 function updateArmor(hudHandle, playerMech) {
-  const { armorCells } = hudHandle;
-  for (const { key } of ARMOR_LOCATIONS) {
-    const loc = playerMech.locations[key];
-    const cell = armorCells[key];
-    if (!loc || !cell) continue;
-    if (loc.destroyed) {
-      cell.classList.remove(...STATUS_CLASSES);
-      cell.classList.add('mech-hud-destroyed');
-      continue;
-    }
-    cell.classList.remove('mech-hud-destroyed');
-    const armorFraction = loc.maxArmor > 0 ? loc.armor / loc.maxArmor : 0;
-    setStatusClass(cell, heatToColor(1 - armorFraction));
-  }
+  updateArmorCells(hudHandle.armorCells, playerMech);
 }
 
 function weaponReadyCategory(weapon) {
@@ -400,7 +522,8 @@ function updateReticle(hudHandle, playerMech) {
 export function updateHud(hudHandle, playerMech, world) {
   updateReticle(hudHandle, playerMech);
   updateRadar(hudHandle, playerMech, world);
-  updateTarget(hudHandle, playerMech, world);
+  const target = updateTarget(hudHandle, playerMech, world);
+  updateRoster(hudHandle, playerMech, world, target ? target.id : null);
   updateHeat(hudHandle, playerMech);
   updateArmor(hudHandle, playerMech);
   updateWeapons(hudHandle, playerMech);

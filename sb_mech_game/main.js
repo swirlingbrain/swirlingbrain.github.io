@@ -85,7 +85,7 @@ for (const loadout of TEAM_LOADOUTS) {
   mech.currentTargetId = null;
   addMech(world, mech);
 
-  const meshHandle = createPlaceholderMechMesh(loadout.chassisType);
+  const meshHandle = createPlaceholderMechMesh(loadout.chassisType, loadout.team);
   scene.add(meshHandle.root);
   meshHandles.set(mech.id, meshHandle);
   footstepDistance.set(mech.id, 0);

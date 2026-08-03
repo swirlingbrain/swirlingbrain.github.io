@@ -38,6 +38,13 @@ export const COVER_OBSTACLES = [
   { x: -25, z: -20, radius: 12, type: 'ruin' },
   { x: 8, z: 32, radius: 10, type: 'ruin' },
   { x: -18, z: -30, radius: 11, type: 'rock' },
+  // Added on request for more rock outcroppings specifically -- these fill
+  // quadrants the original 6 left sparse (far positive-x/positive-z, and
+  // further out toward the map edges), still clear of the x=0/z=0 axes.
+  { x: 55, z: 30, radius: 12, type: 'rock' },
+  { x: 28, z: -62, radius: 11, type: 'rock' },
+  { x: -48, z: -55, radius: 12, type: 'rock' },
+  { x: 65, z: -18, radius: 9, type: 'rock' },
 ];
 
 // Treats each obstacle as a full-height vertical cylinder (a reasonable

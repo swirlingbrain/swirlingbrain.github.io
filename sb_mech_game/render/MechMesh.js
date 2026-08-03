@@ -43,26 +43,29 @@ export const CHASSIS_MESH_DIMS = {
   },
 };
 
-// One faction-accent color per chassis weight class (also gives a color-coded
-// visual read of "what am I looking at" beyond pure silhouette), used on the
-// visor/vent details. Legs/torso/arms use the same gunmetal-family metal
-// material across all chassis (per the design's "shared material language"
-// intent) generated once per chassis type below, not once per mech instance,
-// so every mech of the same class looks identical and startup cost stays low
-// even with 8 mechs spawned.
-const CHASSIS_ACCENT_COLOR = {
-  light: 0x3ddbd0,
-  medium: 0x7fe7ff,
-  heavy: 0xffb020,
-  assault: 0xff5b4a,
+// Accent color (visor/vent/stripe) is keyed by TEAM, not chassis weight
+// class -- real playtesting reported it was "hard to tell which mechs are
+// friends or foes," and the previous per-chassis accent color was the
+// direct cause: an allied medium and an enemy medium rendered with the
+// identical cyan accent, since chassis type has no relationship to team.
+// These match the radar's existing team colors (Hud.js's updateRadar) so
+// the color language is consistent everywhere on screen, not just here.
+// Legs/torso/arms still use the same gunmetal-family metal material across
+// all chassis/teams (per the design's "shared material language" intent).
+const TEAM_ACCENT_COLOR = {
+  allies: 0x3ddc71,
+  enemies: 0xff3b3b,
 };
+const DEFAULT_ACCENT_COLOR = 0x7fe7ff;
 
-const materialCacheByChassis = new Map();
-function getMaterialsForChassis(chassisType) {
-  if (materialCacheByChassis.has(chassisType)) return materialCacheByChassis.get(chassisType);
+const materialCacheByKey = new Map();
+function getMaterialsForChassis(chassisType, team) {
+  const cacheKey = `${chassisType}:${team}`;
+  if (materialCacheByKey.has(cacheKey)) return materialCacheByKey.get(cacheKey);
   // Seeds vary per part so the same chassis's leg/torso/arm textures aren't
   // literally identical tiling, while staying deterministic (no Math.random).
   const seedBase = Array.from(chassisType).reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const accentColor = TEAM_ACCENT_COLOR[team] ?? DEFAULT_ACCENT_COLOR;
   const materials = {
     leg: createMetalMaterial(0x4a4d52, seedBase + 1),
     torso: createMetalMaterial(0x5c6068, seedBase + 2),
@@ -70,20 +73,20 @@ function getMaterialsForChassis(chassisType) {
     arm: createMetalMaterial(0x45484d, seedBase + 4),
     barrel: createMetalMaterial(0x2b2d30, seedBase + 5),
     accent: new THREE.MeshStandardMaterial({
-      color: CHASSIS_ACCENT_COLOR[chassisType] || CHASSIS_ACCENT_COLOR.medium,
-      emissive: CHASSIS_ACCENT_COLOR[chassisType] || CHASSIS_ACCENT_COLOR.medium,
+      color: accentColor,
+      emissive: accentColor,
       emissiveIntensity: 0.9,
       metalness: 0.2,
       roughness: 0.4,
     }),
   };
-  materialCacheByChassis.set(chassisType, materials);
+  materialCacheByKey.set(cacheKey, materials);
   return materials;
 }
 
-export function createPlaceholderMechMesh(chassisType = 'medium') {
+export function createPlaceholderMechMesh(chassisType = 'medium', team = 'allies') {
   const dims = CHASSIS_MESH_DIMS[chassisType] ?? CHASSIS_MESH_DIMS.medium;
-  const mats = getMaterialsForChassis(CHASSIS_MESH_DIMS[chassisType] ? chassisType : 'medium');
+  const mats = getMaterialsForChassis(CHASSIS_MESH_DIMS[chassisType] ? chassisType : 'medium', team);
 
   const root = new THREE.Group();
 
