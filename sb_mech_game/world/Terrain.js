@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import {
   TERRAIN_SIZE, HEIGHT_SCALE, COVER_OBSTACLES, getTerrainHeight, smoothNoise,
 } from './TerrainConstants.js';
-import { createRockMaterial, createMetalMaterial } from '../render/ProceduralTextures.js';
+import {
+  createRockMaterial, createMetalMaterial, createGroundDetailTexture, createMetalRoughnessTexture,
+} from '../render/ProceduralTextures.js';
 
 // Re-exported for backward compatibility -- callers that only need the pure
 // data/math (e.g. ai/Behavior.js's cover-seeking) should import directly from
@@ -57,8 +59,26 @@ function buildGroundMesh() {
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
 
+  // The vertex colors above give the map its grass/dirt/rock biome bands,
+  // but painted alone that reads as flat, uniformly-shaded color per band --
+  // real user feedback repeatedly called the game "blocky and crude" and
+  // this ground was one of the few surfaces never touched by the procedural
+  // PBR pass mechs/cover got. A near-neutral detail texture tiled densely
+  // (GROUND_DETAIL_REPEATS times across the map) and multiplied with the
+  // vertex color adds fine grain/mottling on top without disturbing the
+  // actual biome hues -- see createGroundDetailTexture's own comment.
+  const GROUND_DETAIL_REPEATS = 50;
+  const detailMap = createGroundDetailTexture(1);
+  detailMap.repeat.set(GROUND_DETAIL_REPEATS, GROUND_DETAIL_REPEATS);
+  const roughnessMap = createMetalRoughnessTexture(1);
+  roughnessMap.wrapS = THREE.RepeatWrapping;
+  roughnessMap.wrapT = THREE.RepeatWrapping;
+  roughnessMap.repeat.set(GROUND_DETAIL_REPEATS, GROUND_DETAIL_REPEATS);
+
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
+    map: detailMap,
+    roughnessMap,
     roughness: 1,
     metalness: 0,
   });

@@ -73,6 +73,7 @@ function spawnPositionFor(laneIndex, team) {
 
 const meshHandles = new Map();
 const footstepDistance = new Map();
+const walkCyclePhase = new Map();
 const laneIndexByTeam = { allies: 0, enemies: 0 };
 
 for (const loadout of TEAM_LOADOUTS) {
@@ -92,6 +93,7 @@ for (const loadout of TEAM_LOADOUTS) {
   scene.add(meshHandle.root);
   meshHandles.set(mech.id, meshHandle);
   footstepDistance.set(mech.id, 0);
+  walkCyclePhase.set(mech.id, 0);
 }
 
 const playerMech = world.mechs.find((m) => m.id === 'player');
@@ -281,6 +283,22 @@ function handleMechDeaths() {
 }
 
 const FOOTSTEP_INTERVAL_UNITS = 2.5;
+
+// Procedural walk cycle: legs were previously rigid (translate/rotate as one
+// piece with the mech, no articulation at all), a real contributor to the
+// "still looks blocky and crude" feedback. Phase advances with distance
+// traveled (not raw time) via mech.speed*dt, so a stopped mech's legs freeze
+// mid-stride instead of continuing to swing in place, and reversing (speed
+// < 0) naturally reverses the gait instead of needing special-casing.
+const WALK_CYCLE_RADIANS_PER_UNIT = 0.9;
+const MAX_LEG_SWING_RADIANS = 0.35;
+function updateWalkCycle(meshHandle, mechId, mech, dt) {
+  const phase = walkCyclePhase.get(mechId) + mech.speed * dt * WALK_CYCLE_RADIANS_PER_UNIT;
+  walkCyclePhase.set(mechId, phase);
+  meshHandle.leftHipPivot.rotation.x = Math.sin(phase) * MAX_LEG_SWING_RADIANS;
+  meshHandle.rightHipPivot.rotation.x = Math.sin(phase + Math.PI) * MAX_LEG_SWING_RADIANS;
+}
+
 let playerWasAboveHeatWarning = false;
 let matchOver = false;
 
@@ -393,6 +411,7 @@ const loop = new GameLoop((dt) => {
       meshHandle.root.rotation.y = mech.legYaw;
       meshHandle.torsoGroup.rotation.y = mech.torsoYaw;
     }
+    updateWalkCycle(meshHandle, mech.id, mech, dt);
   }
 
   const isAboveHeatWarning = playerMech.heat > HEAT_SHUTDOWN_THRESHOLD * RETREAT_HEAT_FRACTION;

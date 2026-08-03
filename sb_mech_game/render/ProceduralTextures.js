@@ -224,3 +224,60 @@ export function createRockMaterial(baseColorHex, seed = 1) {
     roughness: 0.95,
   });
 }
+
+/**
+ * A near-neutral-gray grain+blotch detail texture meant to be tiled many
+ * times (high wrapS/wrapT repeat) across a large surface and MULTIPLIED
+ * with per-vertex color, not used as the primary albedo -- the ground plane
+ * gets its grass/dirt/rock color from vertex colors already (baked from the
+ * heightmap in world/Terrain.js); this only adds fine surface variation on
+ * top so it stops reading as a single flat-shaded color per biome band.
+ * Values stay close to white (topically brighter/darker patches, not
+ * colored ones) specifically so multiplying doesn't shift the vertex-color
+ * blend's actual hues.
+ */
+export function createGroundDetailTexture(seed = 1, size = 256) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const rand = seededRandom(seed);
+
+  ctx.fillStyle = 'rgb(215,215,215)';
+  ctx.fillRect(0, 0, size, size);
+
+  // Fine grain speckle.
+  for (let i = 0; i < size * 10; i += 1) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const v = Math.round(180 + rand() * 60);
+    ctx.fillStyle = `rgb(${v},${v},${v})`;
+    ctx.globalAlpha = 0.4;
+    ctx.fillRect(x, y, 1 + rand() * 2, 1 + rand() * 2);
+  }
+  ctx.globalAlpha = 1;
+
+  // Larger soft mottled patches (clumps of dirt/vegetation density).
+  const patchCount = 40 + Math.floor(rand() * 20);
+  for (let i = 0; i < patchCount; i += 1) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const r = size * (0.03 + rand() * 0.08);
+    const v = Math.round(170 + rand() * 90);
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgb(${v},${v},${v})`);
+    grad.addColorStop(1, 'rgb(215,215,215)');
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}

@@ -90,31 +90,44 @@ export function createPlaceholderMechMesh(chassisType = 'medium', team = 'allies
 
   const root = new THREE.Group();
 
-  const leftLeg = new THREE.Mesh(
-    new THREE.BoxGeometry(dims.legWidth, dims.legHeight, dims.legWidth),
-    mats.leg,
-  );
-  leftLeg.position.set(-dims.legOffsetX, dims.legHeight / 2, 0);
-  const rightLeg = new THREE.Mesh(
-    new THREE.BoxGeometry(dims.legWidth, dims.legHeight, dims.legWidth),
-    mats.leg,
-  );
-  rightLeg.position.set(dims.legOffsetX, dims.legHeight / 2, 0);
-  root.add(leftLeg, rightLeg);
-
-  // Small ankle/knee joint greebles so the legs don't read as one plain
-  // extruded box -- a thin darker band partway up each leg.
+  // Each leg hangs off a "hip pivot" group positioned at the top of the leg
+  // (matching torsoGroup's height) rather than being added to root directly
+  // -- rotating a pivot at the hip swings the whole leg+joint forward/back
+  // for a walk cycle; rotating the leg mesh itself would pivot around its
+  // own center and look like it's swinging from the knee. The leg mesh and
+  // its joint greeble are children with a negative y offset so nothing
+  // visually moves versus the previous non-rotating placement.
   const jointHeight = dims.legHeight * 0.12;
+  const hipPivots = {};
   for (const legSign of [-1, 1]) {
+    const hipPivot = new THREE.Group();
+    hipPivot.position.set(legSign * dims.legOffsetX, dims.legHeight, 0);
+    root.add(hipPivot);
+
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(dims.legWidth, dims.legHeight, dims.legWidth),
+      mats.leg,
+    );
+    leg.position.set(0, -dims.legHeight / 2, 0);
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    hipPivot.add(leg);
+
+    // Small ankle/knee joint greeble so the leg doesn't read as one plain
+    // extruded box -- a thin darker band partway up the leg.
     const joint = new THREE.Mesh(
       new THREE.BoxGeometry(dims.legWidth * 1.08, jointHeight, dims.legWidth * 1.08),
       mats.barrel,
     );
-    joint.position.set(legSign * dims.legOffsetX, dims.legHeight * 0.42, 0);
+    joint.position.set(0, dims.legHeight * 0.42 - dims.legHeight, 0);
     joint.castShadow = true;
     joint.receiveShadow = true;
-    root.add(joint);
+    hipPivot.add(joint);
+
+    hipPivots[legSign] = hipPivot;
   }
+  const leftHipPivot = hipPivots[-1];
+  const rightHipPivot = hipPivots[1];
 
   const torsoGroup = new THREE.Group();
   torsoGroup.position.set(0, dims.legHeight, 0);
@@ -188,10 +201,12 @@ export function createPlaceholderMechMesh(chassisType = 'medium', team = 'allies
     torsoGroup.add(barrel);
   }
 
-  for (const mesh of [leftLeg, rightLeg, torso, head, leftArm, rightArm, vent, accentStripe, visor]) {
+  for (const mesh of [torso, head, leftArm, rightArm, vent, accentStripe, visor]) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
   }
 
-  return { root, torsoGroup };
+  return {
+    root, torsoGroup, leftHipPivot, rightHipPivot,
+  };
 }
